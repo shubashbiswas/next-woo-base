@@ -54,7 +54,7 @@ export interface WooCommerceResponse<T> {
 }
 
 const USER_AGENT = "Next.js WooCommerce Client";
-const CACHE_TTL = 3600; // 1 hour
+const CACHE_TTL = parseInt(process.env.ISR_CACHE_TTL || "3600", 10);
 
 // Build authenticated URL for WooCommerce REST API
 function buildWooCommerceUrl(

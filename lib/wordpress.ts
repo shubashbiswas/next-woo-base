@@ -3,6 +3,7 @@
 // Types are imported from `wp.d.ts`
 
 import querystring from "query-string";
+import { cache } from "react";
 import type {
   Post,
   Category,
@@ -45,7 +46,7 @@ export interface WordPressResponse<T> {
 }
 
 const USER_AGENT = "Next.js WordPress Client";
-const CACHE_TTL = 3600; // 1 hour
+const CACHE_TTL = parseInt(process.env.ISR_CACHE_TTL || "3600", 10);
 
 // Core fetch - throws on error (for functions that require data)
 async function wordpressFetch<T>(
@@ -472,3 +473,13 @@ export async function getPostsByAuthorPaginated(
 }
 
 export { WordPressAPIError };
+
+// React cache() wrappers for request deduplication within a single render pass
+// Prevents duplicate WordPress API calls when multiple components request the same data
+export const getPostsPaginatedCached = cache(getPostsPaginated);
+export const getPostBySlugCached = cache(getPostBySlug);
+export const getAllCategoriesCached = cache(getAllCategories);
+export const getAllTagsCached = cache(getAllTags);
+export const getAllAuthorsCached = cache(getAllAuthors);
+export const getPostByIdCached = cache(getPostById);
+export const getAllPagesCached = cache(getAllPages);

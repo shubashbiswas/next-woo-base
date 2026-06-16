@@ -1,6 +1,8 @@
 import { getPageBySlug, getAllPages } from "@/lib/wordpress";
-import { generateContentMetadata } from "@/lib/metadata";
+import { generateContentMetadata, stripHtml } from "@/lib/metadata";
 import { Section, Container, Prose } from "@/components/craft";
+import { WebPageJsonLd, BreadcrumbListJsonLd } from "@/components/seo/json-ld";
+import { siteConfig } from "@/site.config";
 import { notFound } from "next/navigation";
 
 import type { Metadata } from "next";
@@ -49,8 +51,17 @@ export default async function Page({
     notFound();
   }
 
+  const siteUrl = siteConfig.site_domain.replace(/\/$/, "");
+
   return (
     <Section>
+      <WebPageJsonLd page={page} />
+      <BreadcrumbListJsonLd
+        items={[
+          { name: "Home", url: siteUrl },
+          { name: stripHtml(page.title.rendered), url: `${siteUrl}/${page.slug}` },
+        ]}
+      />
       <Container>
         <Prose>
           <h2>{page.title.rendered}</h2>

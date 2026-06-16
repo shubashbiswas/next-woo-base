@@ -4,13 +4,12 @@
 #
 # Usage:
 #   docker compose up -d                    # Start everything
-#   docker compose up -d nextjs             # Start only Next.js
 #   docker compose logs -f                  # Follow logs
 #   docker compose down                     # Stop everything
 #   docker compose down -v                  # Stop + delete volumes
 # ═══════════════════════════════════════════════════════════
 
-name: next-wp
+name: next-woo
 
 services:
 
@@ -18,7 +17,7 @@ services:
   # WordPress 7.0 requires MySQL 8.0+ or MariaDB 10.9+
   mysql:
     image: mariadb:11.4
-    container_name: next-wp-db
+    container_name: next-woo-db
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
@@ -39,7 +38,7 @@ services:
   # WordPress 7.0: Best performance with PHP 8.3+ and MySQL 8.0+ / MariaDB 10.11+
   wordpress:
     image: wordpress:7.0-php8.3-apache
-    container_name: next-wp-wordpress
+    container_name: next-woo-wordpress
     restart: unless-stopped
     depends_on:
       mysql:
@@ -57,10 +56,8 @@ services:
         define('DISALLOW_FILE_MODS', true);
     volumes:
       - wordpress_data:/var/www/html
-      # Mount WordPress plugins from host for development
       - ./wordpress/next-revalidate:/var/www/html/wp-content/plugins/next-revalidate
-      # Mount theme (minimal headless theme)
-      - ./wordpress/theme:/var/www/html/wp-content/themes/next-wp
+      - ./wordpress/theme:/var/www/html/wp-content/themes/next-woo
     ports:
       - "8080:80"
     healthcheck:
@@ -83,7 +80,7 @@ services:
         WORDPRESS_HOSTNAME: ${WORDPRESS_HOSTNAME:-localhost}
         WORDPRESS_WEBHOOK_SECRET: ${WORDPRESS_WEBHOOK_SECRET:-dev-secret-do-not-use-in-prod}
         ISR_CACHE_TTL: ${ISR_CACHE_TTL:-3600}
-    container_name: next-wp-nextjs
+    container_name: next-woo-nextjs
     restart: unless-stopped
     depends_on:
       wordpress:
@@ -101,6 +98,6 @@ services:
 
 volumes:
   mysql_data:
-    name: next-wp-mysql-data
+    name: next-woo-mysql-data
   wordpress_data:
-    name: next-wp-wordpress-data
+    name: next-woo-wordpress-data

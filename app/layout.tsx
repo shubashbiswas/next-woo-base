@@ -2,13 +2,17 @@ import "./globals.css";
 
 import { Inter as FontSans } from "next/font/google";
 import { ThemeProvider } from "@/components/theme/theme-provider";
-import { Analytics } from "@vercel/analytics/react";
 import { CartProvider } from "@/components/shop";
 import { Nav } from "@/components/layout/nav";
 import { Footer } from "@/components/layout/footer";
+import { Analytics } from "@/components/analytics";
 
 import { siteConfig } from "@/site.config";
 import { cn } from "@/lib/utils";
+import {
+  OrganizationJsonLd,
+  WebSiteJsonLd,
+} from "@/components/seo/json-ld";
 
 import type { Metadata } from "next";
 
@@ -38,6 +42,8 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head />
       <body className={cn("min-h-screen font-sans antialiased", font.variable)}>
+        <OrganizationJsonLd />
+        <WebSiteJsonLd />
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

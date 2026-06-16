@@ -1,9 +1,14 @@
 import { getPostBySlug, getAllPostSlugs } from "@/lib/wordpress";
-import { generateContentMetadata } from "@/lib/metadata";
+import { generateContentMetadata, stripHtml } from "@/lib/metadata";
+import { siteConfig } from "@/site.config";
 
 import { Section, Container, Article, Prose } from "@/components/craft";
 import { badgeVariants } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import {
+  BlogPostingJsonLd,
+  BreadcrumbListJsonLd,
+} from "@/components/seo/json-ld";
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -56,8 +61,23 @@ export default async function Page({
     year: "numeric",
   });
 
+  const siteUrl = siteConfig.site_domain.replace(/\/$/, "");
+
   return (
     <Section>
+      <BlogPostingJsonLd
+        post={post}
+        author={author}
+        category={category}
+        featuredImageUrl={featuredMedia?.source_url}
+      />
+      <BreadcrumbListJsonLd
+        items={[
+          { name: "Home", url: siteUrl },
+          { name: "Posts", url: `${siteUrl}/posts` },
+          { name: stripHtml(post.title.rendered), url: `${siteUrl}/posts/${post.slug}` },
+        ]}
+      />
       <Container>
         <Prose>
           <h1>
@@ -90,11 +110,12 @@ export default async function Page({
           </div>
           {featuredMedia?.source_url && (
             <div className="h-96 my-12 md:h-[500px] overflow-hidden flex items-center justify-center border rounded-lg bg-accent/25">
-              {/* eslint-disable-next-line */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 className="w-full h-full object-cover"
                 src={featuredMedia.source_url}
-                alt={post.title.rendered}
+                alt={featuredMedia.alt_text || post.title.rendered}
+                loading="lazy"
               />
             </div>
           )}

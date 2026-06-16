@@ -23,6 +23,12 @@ class NextRevalidate {
         add_action('admin_menu', [$this, 'add_admin_menu']);
         add_action('admin_init', [$this, 'register_settings']);
 
+        // Admin scripts
+        add_action('admin_enqueue_scripts', [$this, 'admin_enqueue_scripts']);
+
+        // AJAX handler for test connection
+        add_action('wp_ajax_next_revalidate_test_connection', [$this, 'ajax_test_connection']);
+
         // Core Hooks for published/updated content (Handles REST API / DataViews bulk actions too)
         add_action('save_post', [$this, 'on_post_change'], 10, 3);
         add_action('delete_post', [$this, 'on_post_delete']);
@@ -100,6 +106,96 @@ class NextRevalidate {
         echo '<label><input type="checkbox" name="' . $this->option_name . '[debug_mode]" value="1" ' . $checked . ' /> Enable debug logging</label>';
     }
 
+    public function admin_enqueue_scripts($hook) {
+        if ($hook !== 'settings_page_next-revalidate') return;
+        ?>
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var btn = document.getElementById('next-revalidate-test-btn');
+            if (!btn) return;
+            btn.addEventListener('click', function() {
+                var resultEl = document.getElementById('next-revalidate-test-result');
+                btn.disabled = true;
+                btn.textContent = 'Testing...';
+                resultEl.innerHTML = '';
+                var data = new FormData();
+                data.append('action', 'next_revalidate_test_connection');
+                data.append('_ajax_nonce', nextRevalidateAdmin.nonce);
+                fetch(ajaxurl, { method: 'POST', body: data })
+                    .then(function(r) { return r.json(); })
+                    .then(function(res) {
+                        btn.disabled = false;
+                        btn.textContent = 'Test Connection';
+                        if (res.success) {
+                            resultEl.innerHTML = '<div class="notice notice-success inline" style="display:inline-block;"><p>' + res.data.message + ' (HTTP ' + res.data.http_code + ')</p></div>';
+                        } else {
+                            resultEl.innerHTML = '<div class="notice notice-error inline" style="display:inline-block;"><p>' + (res.data && res.data.message ? res.data.message : 'Unknown error') + '</p></div>';
+                        }
+                    })
+                    .catch(function(err) {
+                        btn.disabled = false;
+                        btn.textContent = 'Test Connection';
+                        resultEl.innerHTML = '<div class="notice notice-error inline" style="display:inline-block;"><p>Request failed: ' + err.message + '</p></div>';
+                    });
+            });
+        });
+        </script>
+        <?php
+    }
+
+    public function ajax_test_connection() {
+        check_ajax_referer('next_revalidate_test_connection', '_ajax_nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => 'Permission denied.']);
+        }
+
+        $options = get_option($this->option_name);
+        $nextjs_url = $options['nextjs_url'] ?? '';
+        $webhook_secret = $options['webhook_secret'] ?? '';
+
+        if (empty($nextjs_url)) {
+            wp_send_json_error(['message' => 'Next.js Site URL is not configured. Please save your settings first.']);
+        }
+
+        $url = rtrim($nextjs_url, '/') . '/api/revalidate';
+
+        $payload = [
+            'target' => [
+                'type' => 'page',
+                'slug' => 'test-connection',
+                'id'   => 0
+            ],
+            'event' => 'test',
+            'timestamp' => time()
+        ];
+
+        $response = wp_remote_post($url, [
+            'timeout' => 15,
+            'headers' => [
+                'Content-Type' => 'application/json',
+                'x-webhook-secret' => $webhook_secret
+            ],
+            'body' => json_encode($payload)
+        ]);
+
+        if (is_wp_error($response)) {
+            wp_send_json_error(['message' => 'Connection failed: ' . $response->get_error_message()]);
+        }
+
+        $http_code = wp_remote_retrieve_response_code($response);
+
+        if ($http_code === 200) {
+            wp_send_json_success([
+                'message' => 'Connection successful! Next.js responded correctly.',
+                'http_code' => $http_code
+            ]);
+        } else {
+            $body = wp_remote_retrieve_body($response);
+            wp_send_json_error(['message' => 'Next.js returned HTTP ' . $http_code . '. Response: ' . substr($body, 0, 200)]);
+        }
+    }
+
     public function settings_page() {
         if (!current_user_can('manage_options')) return;
         $last = get_option($this->last_option);
@@ -116,6 +212,14 @@ class NextRevalidate {
             <form method="post" action="options.php">
                 <?php settings_fields($this->option_name); do_settings_sections('next-revalidate'); submit_button(); ?>
             </form>
+
+            <p>
+                <button type="button" class="button button-secondary" id="next-revalidate-test-btn">Test Connection</button>
+                <span id="next-revalidate-test-result" style="margin-left:10px;"></span>
+            </p>
+            <script>
+            var nextRevalidateAdmin = { nonce: '<?php echo wp_create_nonce('next_revalidate_test_connection'); ?>' };
+            </script>
 
             <hr>
             <h2>Recent Targeted Logs (Max 50)</h2>

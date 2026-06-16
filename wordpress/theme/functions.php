@@ -35,9 +35,14 @@ add_action('template_redirect', function () {
 
     // 4. Resolve the Next.js Target URL Path safely
     // Fallback order: PHP Environment -> WordPress settings database option
-    $nextjs_base_url = getenv('NEXTJS_URL') 
-        ? rtrim(getenv('NEXTJS_URL'), '/') 
-        : rtrim(get_option('next_revalidate_settings')['nextjs_url'] ?? '', '/');
+    // Try environment variable first, then WordPress plugin settings
+    $env_url = getenv('NEXTJS_URL');
+    if (!empty($env_url)) {
+        $nextjs_base_url = rtrim($env_url, '/');
+    } else {
+        $revalidate_settings = get_option('next_revalidate_settings', []);
+        $nextjs_base_url = rtrim($revalidate_settings['nextjs_url'] ?? '', '/');
+    }
 
     // Only redirect if a valid Next.js URL has actually been configured
     if (!empty($nextjs_base_url)) {

@@ -3,6 +3,31 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const maxDuration = 30;
 
+// In-memory token bucket rate limiter
+// Resets automatically; no external dependencies required
+const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(
+  key: string,
+  maxRequests: number = 10,
+  windowMs: number = 60000
+): boolean {
+  const now = Date.now();
+  const record = rateLimitStore.get(key);
+
+  if (!record || now > record.resetAt) {
+    rateLimitStore.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+
+  if (record.count >= maxRequests) {
+    return false;
+  }
+
+  record.count++;
+  return true;
+}
+
 interface RevalidateWebhookPayload {
   target: {
     type: "post" | "page" | "taxonomy";
@@ -22,7 +47,36 @@ export async function POST(request: NextRequest) {
     const requestBody: RevalidateWebhookPayload = await request.json();
     const secret = request.headers.get("x-webhook-secret");
 
-    // 1. Authentication Layer Guard
+    // 1. Rate Limiting — Prevents abuse even if secret is compromised
+    const ip =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      "unknown";
+
+    if (!checkRateLimit(ip, 10, 60000)) {
+      console.warn(`Rate limit exceeded for IP: ${ip}`);
+      return NextResponse.json(
+        { message: "Too many revalidation requests. Try again later." },
+        { status: 429 }
+      );
+    }
+
+    // 2. Origin Validation — Ensure request comes from known WordPress URL
+    const origin =
+      request.headers.get("origin") || request.headers.get("referer") || "";
+    const wordpressUrl = process.env.WORDPRESS_URL;
+
+    if (origin && wordpressUrl && !origin.startsWith(wordpressUrl)) {
+      console.error(
+        `Revalidation request from unauthorized origin: ${origin}`
+      );
+      return NextResponse.json(
+        { message: "Unauthorized origin" },
+        { status: 403 }
+      );
+    }
+
+    // 3. Authentication Layer Guard
     if (secret !== process.env.WORDPRESS_WEBHOOK_SECRET) {
       console.error("Invalid webhook secret");
       return NextResponse.json(
@@ -46,10 +100,10 @@ export async function POST(request: NextRequest) {
 
     console.log(`Processing async payload [${event}] for specific targets -> Type: ${contentType} | Slug: ${slug}`);
 
-    // 2. Clear Global Wrapper Cache Tags (Fixed for Next.js 16)
+    // 4. Clear Global Wrapper Cache Tags (Fixed for Next.js 16)
     revalidateTag("wordpress", {});
 
-    // 3. Isolated Target Invalidation Logic
+    // 5. Isolated Target Invalidation Logic
     if (contentType === "post") {
       revalidateTag("posts", {});
       revalidateTag("posts-page-1", {}); // Wipe just primary post feed references
@@ -93,7 +147,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 4. Update index view safely without destroying site layout components
+    // 6. Update index view safely without destroying site layout components
     revalidatePath("/", "page"); 
 
     // Explicit HTTP 200 array response required for WP-Cron acknowledgement
