@@ -1,0 +1,106 @@
+# ═══════════════════════════════════════════════════════════
+#  Docker Compose — Headless WordPress + Next.js
+# ═══════════════════════════════════════════════════════════
+#
+# Usage:
+#   docker compose up -d                    # Start everything
+#   docker compose up -d nextjs             # Start only Next.js
+#   docker compose logs -f                  # Follow logs
+#   docker compose down                     # Stop everything
+#   docker compose down -v                  # Stop + delete volumes
+# ═══════════════════════════════════════════════════════════
+
+name: next-wp
+
+services:
+
+  # ─── Database ────────────────────────────────────────────
+  # WordPress 7.0 requires MySQL 8.0+ or MariaDB 10.9+
+  mysql:
+    image: mariadb:11.4
+    container_name: next-wp-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-nextwp}
+      MYSQL_USER: ${MYSQL_USER:-nextwp}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-nextwp}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3307:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── WordPress ───────────────────────────────────────────
+  # WordPress 7.0: Best performance with PHP 8.3+ and MySQL 8.0+ / MariaDB 10.11+
+  wordpress:
+    image: wordpress:7.0-php8.3-apache
+    container_name: next-wp-wordpress
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      WORDPRESS_DB_HOST: mysql:3306
+      WORDPRESS_DB_USER: ${MYSQL_USER:-nextwp}
+      WORDPRESS_DB_PASSWORD: ${MYSQL_PASSWORD:-nextwp}
+      WORDPRESS_DB_NAME: ${MYSQL_DATABASE:-nextwp}
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_HOME', 'http://localhost:8080');
+        define('WP_SITEURL', 'http://localhost:8080');
+        define('WP_POST_REVISIONS', 5);
+        define('WP_AUTO_UPDATE_CORE', false);
+        define('DISALLOW_FILE_MODS', true);
+    volumes:
+      - wordpress_data:/var/www/html
+      # Mount WordPress plugins from host for development
+      - ./wordpress/next-revalidate:/var/www/html/wp-content/plugins/next-revalidate
+      # Mount theme (minimal headless theme)
+      - ./wordpress/theme:/var/www/html/wp-content/themes/next-wp
+    ports:
+      - "8080:80"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -f http://localhost/wp-admin/install.php || exit 0"
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ─── Next.js ─────────────────────────────────────────────
+  nextjs:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        WORDPRESS_URL: ${WORDPRESS_URL:-http://localhost:8080}
+        WORDPRESS_HOSTNAME: ${WORDPRESS_HOSTNAME:-localhost}
+        WORDPRESS_WEBHOOK_SECRET: ${WORDPRESS_WEBHOOK_SECRET:-dev-secret-do-not-use-in-prod}
+        ISR_CACHE_TTL: ${ISR_CACHE_TTL:-3600}
+    container_name: next-wp-nextjs
+    restart: unless-stopped
+    depends_on:
+      wordpress:
+        condition: service_started
+    environment:
+      WORDPRESS_URL: ${WORDPRESS_URL:-http://wordpress:80}
+      WORDPRESS_HOSTNAME: ${WORDPRESS_HOSTNAME:-localhost}
+      WORDPRESS_WEBHOOK_SECRET: ${WORDPRESS_WEBHOOK_SECRET:-dev-secret-do-not-use-in-prod}
+      ISR_CACHE_TTL: ${ISR_CACHE_TTL:-3600}
+      NODE_ENV: production
+      HOSTNAME: "0.0.0.0"
+      PORT: 3000
+    ports:
+      - "3000:3000"
+
+volumes:
+  mysql_data:
+    name: next-wp-mysql-data
+  wordpress_data:
+    name: next-wp-wordpress-data
