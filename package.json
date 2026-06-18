@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev --turbo",
     "build": "next build",
-    "start": "next start",
+    "start": "node standalone-start.cjs",
+    "start:next": "next start",
     "lint": "next lint"
   },
   "dependencies": {

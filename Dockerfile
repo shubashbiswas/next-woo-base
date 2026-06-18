@@ -42,10 +42,14 @@ ARG WORDPRESS_URL
 ARG WORDPRESS_HOSTNAME
 ARG WORDPRESS_WEBHOOK_SECRET
 ARG ISR_CACHE_TTL
+ARG WC_CONSUMER_KEY
+ARG WC_CONSUMER_SECRET
 ENV WORDPRESS_URL=$WORDPRESS_URL
 ENV WORDPRESS_HOSTNAME=$WORDPRESS_HOSTNAME
 ENV WORDPRESS_WEBHOOK_SECRET=$WORDPRESS_WEBHOOK_SECRET
 ENV ISR_CACHE_TTL=$ISR_CACHE_TTL
+ENV WC_CONSUMER_KEY=$WC_CONSUMER_KEY
+ENV WC_CONSUMER_SECRET=$WC_CONSUMER_SECRET
 
 # Install sharp for Next.js image optimization
 RUN corepack enable && corepack prepare pnpm@latest --activate && \
@@ -55,6 +59,9 @@ RUN corepack enable && corepack prepare pnpm@latest --activate && \
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+
+# Copy the standalone-start wrapper (handles env loading & server startup with WooCommerce support)
+COPY standalone-start.cjs ./standalone-start.cjs
 
 # Create non-root user and set ownership
 RUN addgroup --system --gid 1001 nodejs && \
@@ -68,4 +75,4 @@ EXPOSE 3000
 ENV HOSTNAME="0.0.0.0"
 ENV PORT=3000
 
-CMD ["node", "server.js"]
+CMD ["node", "standalone-start.cjs"]
