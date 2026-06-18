@@ -16,12 +16,15 @@ export function truncateText(text: string, maxLength: number = 200): string {
   return text.slice(0, maxLength).trim() + "...";
 }
 
+export type BasePathType = "blog" | "page" | "pages";
+
 interface ContentMetadataOptions {
   title: string;
   excerpt?: string;
   content?: string;
   slug: string;
-  type: "post" | "page";
+  type?: "post" | "page";
+  basePath?: BasePathType;
 }
 
 /**
@@ -33,6 +36,7 @@ export function generateContentMetadata({
   content,
   slug,
   type,
+  basePath,
 }: ContentMetadataOptions): Metadata {
   const description = excerpt
     ? stripHtml(excerpt)
@@ -44,7 +48,8 @@ export function generateContentMetadata({
   ogUrl.searchParams.append("title", title);
   ogUrl.searchParams.append("description", description);
 
-  const path = type === "post" ? "posts" : "pages";
+  // Use basePath if provided, otherwise fall back to type-based path
+  const path = basePath || (type === "post" ? "posts" : "pages");
 
   return {
     title,

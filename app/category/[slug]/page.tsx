@@ -1,12 +1,5 @@
-import {
-  getPostsPaginated,
-  getAllAuthors,
-  getAllTags,
-  getAllCategories,
-  searchAuthors,
-  searchTags,
-  searchCategories,
-} from "@/lib/wordpress";
+import { getCategoryBySlug, getPostsByCategoryPaginated } from "@/lib/wordpress";
+import { siteConfig } from "@/site.config";
 
 import {
   Pagination,
@@ -19,83 +12,81 @@ import {
 
 import { Section, Container, Prose } from "@/components/craft";
 import { PostCard } from "@/components/posts/post-card";
-import { FilterPosts } from "@/components/posts/filter";
-import { SearchInput } from "@/components/posts/search-input";
+import { BreadcrumbListJsonLd } from "@/components/seo/json-ld";
 
+import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
-export const metadata: Metadata = {
-  title: "Blog Posts",
-  description: "Browse all our blog posts",
-};
-
-export const dynamic = "auto";
 export const revalidate = 3600;
 
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const category = await getCategoryBySlug(slug);
+
+  if (!category) {
+    return {};
+  }
+
+  return {
+    title: `${category.name} - Category`,
+    description: category.description || `Browse all posts in ${category.name}`,
+    alternates: {
+      canonical: `/category/${category.slug}`,
+    },
+  };
+}
+
 export default async function Page({
+  params,
   searchParams,
 }: {
-  searchParams: Promise<{
-    author?: string;
-    tag?: string;
-    category?: string;
-    page?: string;
-    search?: string;
-  }>;
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ page?: string }>;
 }) {
-  const params = await searchParams;
-  const { author, tag, category, page: pageParam, search } = params;
+  const { slug } = await params;
+  const { page: pageParam } = await searchParams;
+  const category = await getCategoryBySlug(slug);
 
-  // Handle pagination
+  if (!category) {
+    notFound();
+  }
+
   const page = pageParam ? parseInt(pageParam, 10) : 1;
   const postsPerPage = 9;
 
-  // Fetch data based on search parameters using efficient pagination
-  const [postsResponse, authors, tags, categories] = await Promise.all([
-    getPostsPaginated(page, postsPerPage, { author, tag, category, search }),
-    search ? searchAuthors(search) : getAllAuthors(),
-    search ? searchTags(search) : getAllTags(),
-    search ? searchCategories(search) : getAllCategories(),
-  ]);
-
-  const { data: posts, headers } = postsResponse;
+  const { data: posts, headers } = await getPostsByCategoryPaginated(
+    category.id,
+    page,
+    postsPerPage
+  );
   const { total, totalPages } = headers;
 
-  // Create pagination URL helper
-  const createPaginationUrl = (newPage: number) => {
-    const params = new URLSearchParams();
-    if (newPage > 1) params.set("page", newPage.toString());
-    if (category) params.set("category", category);
-    if (author) params.set("author", author);
-    if (tag) params.set("tag", tag);
-    if (search) params.set("search", search);
-    return `/posts${params.toString() ? `?${params.toString()}` : ""}`;
-  };
+  const siteUrl = siteConfig.site_domain.replace(/\/$/, "");
 
   return (
     <Section>
+      <BreadcrumbListJsonLd
+        items={[
+          { name: "Home", url: siteUrl },
+          { name: "Blog", url: `${siteUrl}/blog` },
+          { name: category.name, url: `${siteUrl}/category/${category.slug}` },
+        ]}
+      />
       <Container>
         <div className="space-y-8">
           <Prose>
-            <h2>All Posts</h2>
+            <h2>{category.name}</h2>
+            {category.description && (
+              <p className="text-muted-foreground">{category.description}</p>
+            )}
             <p className="text-muted-foreground">
               {total} {total === 1 ? "post" : "posts"} found
-              {search && " matching your search"}
             </p>
           </Prose>
-
-          <div className="space-y-4">
-            <SearchInput defaultValue={search} />
-
-            <FilterPosts
-              authors={authors}
-              tags={tags}
-              categories={categories}
-              selectedAuthor={author}
-              selectedTag={tag}
-              selectedCategory={category}
-            />
-          </div>
 
           {posts.length > 0 ? (
             <div className="grid md:grid-cols-3 gap-4">
@@ -105,7 +96,7 @@ export default async function Page({
             </div>
           ) : (
             <div className="h-24 w-full border rounded-lg bg-accent/25 flex items-center justify-center">
-              <p>No posts found</p>
+              <p>No posts found in this category</p>
             </div>
           )}
 
@@ -116,14 +107,13 @@ export default async function Page({
                   {page > 1 && (
                     <PaginationItem>
                       <PaginationPrevious
-                        href={createPaginationUrl(page - 1)}
+                        href={`/category/${slug}?page=${page - 1}`}
                       />
                     </PaginationItem>
                   )}
 
                   {Array.from({ length: totalPages }, (_, i) => i + 1)
                     .filter((pageNum) => {
-                      // Show current page, first page, last page, and 2 pages around current
                       return (
                         pageNum === 1 ||
                         pageNum === totalPages ||
@@ -138,7 +128,7 @@ export default async function Page({
                           {showEllipsis && <span className="px-2">...</span>}
                           <PaginationItem>
                             <PaginationLink
-                              href={createPaginationUrl(pageNum)}
+                              href={`/category/${slug}?page=${pageNum}`}
                               isActive={pageNum === page}
                             >
                               {pageNum}
@@ -150,7 +140,9 @@ export default async function Page({
 
                   {page < totalPages && (
                     <PaginationItem>
-                      <PaginationNext href={createPaginationUrl(page + 1)} />
+                      <PaginationNext
+                        href={`/category/${slug}?page=${page + 1}`}
+                      />
                     </PaginationItem>
                   )}
                 </PaginationContent>

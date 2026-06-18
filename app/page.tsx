@@ -127,7 +127,7 @@ export default function Home() {
             {/* Blog Links */}
             <Link
               className="border h-48 bg-accent/50 rounded-lg p-4 flex flex-col justify-between hover:scale-[1.02] transition-all"
-              href="/posts"
+              href="/blog"
             >
               <Pen size={32} />
               <span>

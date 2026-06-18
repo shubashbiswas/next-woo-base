@@ -29,8 +29,8 @@ export async function GET() {
         (post) => `
     <item>
       <title>${escapeXml(stripHtml(post.title.rendered))}</title>
-      <link>${siteConfig.site_domain}/posts/${post.slug}</link>
-      <guid isPermaLink="true">${siteConfig.site_domain}/posts/${post.slug}</guid>
+      <link>${siteConfig.site_domain}/blog/${post.slug}</link>
+      <guid isPermaLink="true">${siteConfig.site_domain}/blog/${post.slug}</guid>
       <description>${escapeXml(stripHtml(post.excerpt.rendered))}</description>
       <content:encoded><![CDATA[${post.content.rendered}]]></content:encoded>
       <pubDate>${new Date(post.date).toUTCString()}</pubDate>

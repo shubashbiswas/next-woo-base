@@ -82,10 +82,30 @@ const nextConfig: NextConfig = {
     if (!wordpressUrl) {
       return [];
     }
-    return [
+    const wordpressRedirects = [
       {
         source: "/admin",
         destination: `${wordpressUrl}/wp-admin`,
+        permanent: true,
+      },
+    ];
+
+    return [
+      ...wordpressRedirects,
+      // WordPress-style permalink redirects from old post routes
+      {
+        source: "/posts",
+        destination: "/blog",
+        permanent: true,
+      },
+      {
+        source: "/posts/page/:page",
+        destination: "/blog?page=:page",
+        permanent: true,
+      },
+      {
+        source: "/posts/:slug",
+        destination: "/blog/:slug",
         permanent: true,
       },
     ];

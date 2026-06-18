@@ -35,6 +35,7 @@ export async function generateMetadata({
     excerpt: post.excerpt.rendered,
     slug: post.slug,
     type: "post",
+    basePath: "blog",
   });
 }
 
@@ -50,11 +51,9 @@ export default async function Page({
     notFound();
   }
 
-  // Extract from embedded data (no separate API calls needed)
-  const featuredMedia = post._embedded?.["wp:featuredmedia"]?.[0];
   const author = post._embedded?.author?.[0];
+  const featuredMedia = post._embedded?.["wp:featuredmedia"]?.[0];
   const category = post._embedded?.["wp:term"]?.[0]?.[0];
-
   const date = new Date(post.date).toLocaleDateString("en-US", {
     month: "long",
     day: "numeric",
@@ -62,6 +61,7 @@ export default async function Page({
   });
 
   const siteUrl = siteConfig.site_domain.replace(/\/$/, "");
+  const postUrl = `${siteUrl}/blog/${post.slug}`;
 
   return (
     <Section>
@@ -74,8 +74,8 @@ export default async function Page({
       <BreadcrumbListJsonLd
         items={[
           { name: "Home", url: siteUrl },
-          { name: "Posts", url: `${siteUrl}/posts` },
-          { name: stripHtml(post.title.rendered), url: `${siteUrl}/posts/${post.slug}` },
+          { name: "Blog", url: `${siteUrl}/blog` },
+          { name: stripHtml(post.title.rendered), url: postUrl },
         ]}
       />
       <Container>
@@ -89,16 +89,18 @@ export default async function Page({
             <h5>
               Published {date}
               {author?.name && (
-                <span>
-                  {" "}
-                  by <a href={`/posts/?author=${author.id}`}>{author.name}</a>
-                </span>
+                <>
+                  {" "}by{" "}
+                  <span>
+                    <a href={`/author/${author.slug}`}>{author.name}</a>
+                  </span>
+                </>
               )}
             </h5>
 
             {category && (
               <Link
-                href={`/posts/?category=${category.id}`}
+                href={`/category/${category.slug}`}
                 className={cn(
                   badgeVariants({ variant: "outline" }),
                   "no-underline!"

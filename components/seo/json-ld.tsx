@@ -40,7 +40,7 @@ export function WebSiteJsonLd() {
       "@type": "SearchAction",
       target: {
         "@type": "EntryPoint",
-        urlTemplate: `${siteConfig.site_domain}/posts?search={search_term_string}`,
+        urlTemplate: `${siteConfig.site_domain}/blog?search={search_term_string}`,
       },
       "query-input": "required name=search_term_string",
     },
@@ -92,7 +92,7 @@ export function BlogPostingJsonLd({
   featuredImageUrl?: string;
 }) {
   const siteUrl = siteConfig.site_domain.replace(/\/$/, "");
-  const postUrl = `${siteUrl}/posts/${post.slug}`;
+  const postUrl = `${siteUrl}/blog/${post.slug}`;
 
   const data: Record<string, unknown> = {
     "@context": "https://schema.org",
