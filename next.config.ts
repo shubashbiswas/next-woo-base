@@ -103,11 +103,6 @@ const nextConfig: NextConfig = {
         destination: "/blog?page=:page",
         permanent: true,
       },
-      {
-        source: "/posts/:slug",
-        destination: "/blog/:slug",
-        permanent: true,
-      },
     ];
   },
 };
