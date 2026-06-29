@@ -37,6 +37,15 @@ class NextRevalidate {
         // Taxonomy links (only when attached to published content)
         add_action('set_object_terms', [$this, 'on_taxonomy_change'], 10, 6);
 
+        // WooCommerce product webhooks — triggers cache invalidation on product changes.
+        // Only registers if WooCommerce is active; gracefully degrades otherwise.
+        if (class_exists('WooCommerce')) {
+            add_action('woocommerce_created_product', [$this, 'on_woocommerce_product_change'], 10, 2);
+            add_action('woocommerce_update_product', [$this, 'on_woocommerce_product_change'], 10, 2);
+            add_action('woocommerce_delete_product', [$this, 'on_woocommerce_product_deleted'], 10, 1);
+            add_action('woocommerce_product_set_stock', [$this, 'on_woocommerce_stock_change'], 10, 2);
+        }
+
         // Background Cron execution hook
         add_action($this->cron_hook, [$this, 'execute_async_revalidation'], 10, 2);
     }
@@ -296,6 +305,60 @@ class NextRevalidate {
             'type' => $post->post_type,
             'taxonomy' => $taxonomy,
             'action' => 'update'
+        ]);
+    }
+
+    /**
+     * Handle WooCommerce product changes (create/update).
+     * Triggers cache invalidation for the affected product and shop pages.
+     */
+    public function on_woocommerce_product_change($product_id, $product) {
+        if (!class_exists('WooCommerce')) return;
+
+        $slug = is_object($product) && method_exists($product, 'get_slug') ? $product->get_slug() : '';
+        if (empty($slug)) {
+            $slug = get_post_field('post_name', $product_id);
+        }
+
+        $this->schedule_revalidation('product', [
+            'id' => $product_id,
+            'slug' => $slug,
+            'type' => 'product',
+            'action' => 'update'
+        ]);
+    }
+
+    /**
+     * Handle WooCommerce product deletion.
+     * Triggers cache invalidation for the deleted product's slug (preserved from post_name).
+     */
+    public function on_woocommerce_product_deleted($product_id) {
+        if (!class_exists('WooCommerce')) return;
+
+        $slug = get_post_field('post_name', $product_id);
+
+        $this->schedule_revalidation('product', [
+            'id' => $product_id,
+            'slug' => $slug,
+            'type' => 'product',
+            'action' => 'delete'
+        ]);
+    }
+
+    /**
+     * Handle WooCommerce stock changes.
+     * Triggers targeted cache invalidation for the specific product only (not full shop page).
+     */
+    public function on_woocommerce_stock_change($product_id, $quantity) {
+        if (!class_exists('WooCommerce')) return;
+
+        $slug = get_post_field('post_name', $product_id);
+
+        $this->schedule_revalidation('product_stock', [
+            'id' => $product_id,
+            'slug' => $slug,
+            'type' => 'product_stock',
+            'action' => 'stock_change'
         ]);
     }
 

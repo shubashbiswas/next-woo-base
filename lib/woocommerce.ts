@@ -66,8 +66,6 @@ function buildWooCommerceUrl(
   }
 
   const url = new URL(`${baseUrl}/wp-json/wc/v3/${endpoint}`);
-  url.searchParams.set("consumer_key", consumerKey);
-  url.searchParams.set("consumer_secret", consumerSecret);
 
   if (query) {
     Object.entries(query).forEach(([key, value]) => {
@@ -78,6 +76,18 @@ function buildWooCommerceUrl(
   }
 
   return url.toString();
+}
+
+// Build Basic Auth header for WooCommerce REST API credentials
+// Credentials are passed via Authorization header instead of URL query params
+// to prevent exposure in server logs, CDN logs, and browser history.
+function buildAuthHeader(): string {
+  if (!consumerKey || !consumerSecret) {
+    throw new Error("WooCommerce not configured");
+  }
+
+  const credentials = `${consumerKey}:${consumerSecret}`;
+  return `Basic ${Buffer.from(credentials).toString("base64")}`;
 }
 
 // Core fetch - throws on error
@@ -97,6 +107,7 @@ async function woocommerceFetch<T>(
     headers: {
       "User-Agent": USER_AGENT,
       "Content-Type": "application/json",
+      Authorization: buildAuthHeader(),
     },
     next: { tags, revalidate: CACHE_TTL },
     ...options,
@@ -148,6 +159,7 @@ async function woocommerceFetchPaginated<T>(
     headers: {
       "User-Agent": USER_AGENT,
       "Content-Type": "application/json",
+      Authorization: buildAuthHeader(),
     },
     next: { tags, revalidate: CACHE_TTL },
   });
@@ -209,6 +221,7 @@ async function woocommerceMutate<T>(
     headers: {
       "User-Agent": USER_AGENT,
       "Content-Type": "application/json",
+      Authorization: buildAuthHeader(),
     },
     body: body ? JSON.stringify(body) : undefined,
     cache: "no-store",
