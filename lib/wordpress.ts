@@ -12,6 +12,7 @@ import type {
   Author,
   FeaturedMedia,
 } from "./wordpress.d";
+import { Agent } from "undici";
 
 // Single source of truth for WordPress configuration
 const baseUrl = process.env.WORDPRESS_URL;
@@ -48,6 +49,13 @@ export interface WordPressResponse<T> {
 const USER_AGENT = "Next.js WordPress Client";
 const CACHE_TTL = parseInt(process.env.ISR_CACHE_TTL || "3600", 10);
 
+// HTTP connection pool for reusing TCP connections to WordPress
+const wpAgent = new Agent({
+  connections: 10,
+  keepAliveTimeout: 60000,
+  keepAliveMaxTimeout: 60000,
+});
+
 // Core fetch - throws on error (for functions that require data)
 async function wordpressFetch<T>(
   path: string,
@@ -63,6 +71,7 @@ async function wordpressFetch<T>(
   const response = await fetch(url, {
     headers: { "User-Agent": USER_AGENT },
     next: { tags, revalidate: CACHE_TTL },
+    dispatcher: wpAgent as any, // HTTP connection pooling for reused TCP connections (Node.js 24 built-in fetch)
   });
 
   if (!response.ok) {
@@ -108,6 +117,7 @@ async function wordpressFetchPaginated<T>(
   const response = await fetch(url, {
     headers: { "User-Agent": USER_AGENT },
     next: { tags, revalidate: CACHE_TTL },
+    dispatcher: wpAgent, // HTTP connection pooling for reused TCP connections
   });
 
   if (!response.ok) {

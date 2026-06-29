@@ -193,4 +193,7 @@ export async function POST(request: NextRequest) {
     );
 
   } catch (error) {
-    console.error("Revalidation pipeline unexpected catch loop error:", error
+    console.error("Revalidation pipeline unexpected catch loop error:", error);
+  }
+
+}

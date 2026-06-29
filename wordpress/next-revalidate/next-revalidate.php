@@ -44,10 +44,34 @@ class NextRevalidate {
             add_action('woocommerce_update_product', [$this, 'on_woocommerce_product_change'], 10, 2);
             add_action('woocommerce_delete_product', [$this, 'on_woocommerce_product_deleted'], 10, 1);
             add_action('woocommerce_product_set_stock', [$this, 'on_woocommerce_stock_change'], 10, 2);
+
+            // Product visibility changes (visible/hidden via admin or REST API)
+            add_action('woocommerce_product_set_visibility', [$this, 'on_woocommerce_visibility_change'], 10, 3);
+
+            // Product featured/unfeatured status
+            add_action('woocommerce_product_set_featured', [$this, 'on_woocommerce_featured_change'], 10, 2);
+
+            // Product category assignment changes
+            add_action('woocommerce_product_set_categories', [$this, 'on_woocommerce_category_assignment'], 10, 3);
+
+            // Product variation hooks (created/updated/deleted)
+            add_action('woocommerce_variation_created', [$this, 'on_woocommerce_variation_change'], 10, 2);
+            add_action('woocommerce_variation_updated', [$this, 'on_woocommerce_variation_change'], 10, 2);
+            add_action('woocommerce_variation_deleted', [$this, 'on_woocommerce_variation_deleted'], 10, 1);
+
+            // Order status change hooks (for order-related cache updates)
+            add_action('woocommerce_order_status_completed', [$this, 'on_woocommerce_order_completed'], 10, 1);
+            add_action('woocommerce_order_status_processing', [$this, 'on_woocommerce_order_processing'], 10, 1);
         }
 
         // Background Cron execution hook
         add_action($this->cron_hook, [$this, 'execute_async_revalidation'], 10, 2);
+
+        // Periodic cron fallback — revalidate products that haven't been touched recently
+        if (!wp_next_scheduled('next_revalidate_periodic')) {
+            wp_schedule_event(time(), 'hourly', 'next_revalidate_periodic');
+        }
+        add_action('next_revalidate_periodic', [$this, 'execute_periodic_revalidation']);
     }
 
     public function add_admin_menu() {
@@ -69,9 +93,24 @@ class NextRevalidate {
 
         add_settings_field('nextjs_url', 'Next.js Site URL', [$this, 'field_nextjs_url'], 'next-revalidate', 'next_revalidate_main');
         add_settings_field('webhook_secret', 'Webhook Secret', [$this, 'field_webhook_secret'], 'next-revalidate', 'next_revalidate_main');
+
+        // WooCommerce hooks status indicator (shown only when WooCommerce is active)
+        if (class_exists('WooCommerce')) {
+            add_settings_field('woocommerce_note', 'WooCommerce Hooks Status', [$this, 'field_woocommerce_note'], 'next-revalidate', 'next_revalidate_main');
+        }
+
         add_settings_field('delay_seconds', 'Background Delay (seconds)', [$this, 'field_delay_seconds'], 'next-revalidate', 'next_revalidate_main');
         add_settings_field('max_retries', 'Max Retries', [$this, 'field_max_retries'], 'next-revalidate', 'next_revalidate_main');
         add_settings_field('debug_mode', 'Debug Mode', [$this, 'field_debug_mode'], 'next-revalidate', 'next_revalidate_main');
+    }
+
+    public function field_woocommerce_note() {
+        $options = get_option($this->option_name);
+        if (class_exists('WooCommerce')) {
+            echo '<p style="color: green;"><strong>✓</strong> WooCommerce is active. Product/stock/category/variation/order hooks are registered and will trigger cache invalidation.</p>';
+        } else {
+            echo '<p style="color: orange;"><strong>⚠</strong> WooCommerce is not detected. Product-related cache invalidation will not work until it is activated.</p>';
+        }
     }
 
     public function sanitize_settings($input) {
@@ -209,6 +248,13 @@ class NextRevalidate {
         if (!current_user_can('manage_options')) return;
         $last = get_option($this->last_option);
         $log = get_option($this->log_option, []);
+
+        // Warning when webhook secret is empty but debug mode is enabled
+        $options = get_option($this->option_name);
+        if (!empty($options['debug_mode']) && empty($options['webhook_secret'])) {
+            echo '<div class="notice notice-warning inline"><p><strong>Warning:</strong> Webhook secret is not set. Cache invalidation requests will fail authentication.</p></div>';
+        }
+
         ?>
         <div class="wrap">
             <h1>Next.js Targeted Revalidation Settings</h1>
@@ -362,6 +408,165 @@ class NextRevalidate {
         ]);
     }
 
+    /**
+     * Handle WooCommerce product visibility changes (visible/hidden).
+     */
+    public function on_woocommerce_visibility_change($product_id, $visible) {
+        if (!class_exists('WooCommerce')) return;
+
+        $slug = get_post_field('post_name', $product_id);
+
+        $this->schedule_revalidation('product', [
+            'id' => $product_id,
+            'slug' => $slug,
+            'type' => 'product',
+            'action' => 'visibility_change',
+            'visible' => (bool)$visible
+        ]);
+    }
+
+    /**
+     * Handle WooCommerce product featured/unfeatured status changes.
+     */
+    public function on_woocommerce_featured_change($product_id, $is_featured) {
+        if (!class_exists('WooCommerce')) return;
+
+        $slug = get_post_field('post_name', $product_id);
+
+        $this->schedule_revalidation('product', [
+            'id' => $product_id,
+            'slug' => $slug,
+            'type' => 'product',
+            'action' => 'featured_change',
+            'is_featured' => (bool)$is_featured
+        ]);
+    }
+
+    /**
+     * Handle WooCommerce product category assignment changes.
+     */
+    public function on_woocommerce_category_assignment($product_id, $categories, $tt_ids) {
+        if (!class_exists('WooCommerce')) return;
+
+        $slug = get_post_field('post_name', $product_id);
+
+        // Revalidate the product itself
+        $this->schedule_revalidation('product', [
+            'id' => $product_id,
+            'slug' => $slug,
+            'type' => 'product',
+            'action' => 'category_assignment'
+        ]);
+
+        // Also revalidate affected category pages
+        foreach ($categories as $category) {
+            if (is_object($category)) {
+                $this->schedule_revalidation('woocommerce_category', [
+                    'id' => $category->term_id,
+                    'slug' => $category->slug,
+                    'type' => 'product',
+                    'action' => 'category_assignment'
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Handle WooCommerce product variation changes (created/updated/deleted).
+     */
+    public function on_woocommerce_variation_change($variation_id, $variation) {
+        if (!class_exists('WooCommerce')) return;
+
+        $product = wc_get_product(wc_get_product_id($variation_id));
+        if (!$product) return;
+
+        $slug = get_post_field('post_name', $product->get_id());
+
+        $this->schedule_revalidation('product_variation', [
+            'id' => $variation_id,
+            'slug' => $slug,
+            'type' => 'product',
+            'action' => 'variation_change'
+        ]);
+    }
+
+    /**
+     * Handle WooCommerce product variation deletion.
+     */
+    public function on_woocommerce_variation_deleted($variation_id) {
+        if (!class_exists('WooCommerce')) return;
+
+        $product = wc_get_product(wc_get_product_id($variation_id));
+        if (!$product) return;
+
+        $slug = get_post_field('post_name', $product->get_id());
+
+        $this->schedule_revalidation('product_variation', [
+            'id' => $variation_id,
+            'slug' => $slug,
+            'type' => 'product',
+            'action' => 'variation_deleted'
+        ]);
+    }
+
+    /**
+     * Handle WooCommerce order status changes (completed/processing).
+     */
+    public function on_woocommerce_order_completed($order_id) {
+        if (!class_exists('WooCommerce')) return;
+
+        $this->schedule_revalidation('order', [
+            'id' => $order_id,
+            'slug' => '',
+            'type' => 'order',
+            'action' => 'completed'
+        ]);
+    }
+
+    /**
+     * Handle WooCommerce order status change to processing.
+     */
+    public function on_woocommerce_order_processing($order_id) {
+        if (!class_exists('WooCommerce')) return;
+
+        $this->schedule_revalidation('order', [
+            'id' => $order_id,
+            'slug' => '',
+            'type' => 'order',
+            'action' => 'processing'
+        ]);
+    }
+
+    /**
+     * Periodic cron fallback — revalidate products that haven't been touched recently.
+     */
+    public function execute_periodic_revalidation() {
+        $last_run = get_option($this->last_option);
+        if ($last_run && time() - $last_run['time'] < 3600) return; // Skip if ran within last hour
+
+        try {
+            $products = wc_get_products(['limit' => 5, 'status' => 'publish']);
+        } catch (\Exception $e) {
+            // Fallback: use get_posts as a safety net when WooCommerce functions aren't available
+            $products = get_posts([
+                'post_type' => ['product'],
+                'posts_per_page' => 5,
+                'post_status' => 'publish',
+            ]);
+        }
+
+        foreach ($products as $product) {
+            if (is_object($product)) {
+                $this->schedule_revalidation('product', [
+                    'id' => $product->ID,
+                    'slug' => $product->post_name,
+                    'type' => 'product',
+                    'action' => 'periodic_check'
+                ]);
+            }
+        }
+    }
+
     private function schedule_revalidation($type, $data) {
         $options = get_option($this->option_name);
         if (empty($options['nextjs_url'])) return;
@@ -425,25 +630,34 @@ class NextRevalidate {
             'timestamp' => time()
         ];
 
-        $response = wp_remote_post($url, [
-            'timeout' => 15,
-            'headers' => [
-                'Content-Type' => 'application/json',
-                'x-webhook-secret' => $options['webhook_secret'] ?? ''
-            ],
-            'body' => json_encode($payload)
-        ]);
+        try {
+            $response = wp_remote_post($url, [
+                'timeout' => 15,
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                    'x-webhook-secret' => $options['webhook_secret'] ?? ''
+                ],
+                'body' => json_encode($payload)
+            ]);
 
-        if (is_wp_error($response)) {
-            return ['success' => false, 'http_code' => null, 'error' => $response->get_error_message()];
+            if (is_wp_error($response)) {
+                return ['success' => false, 'http_code' => null, 'error' => $response->get_error_message()];
+            }
+
+            $http_code = wp_remote_retrieve_response_code($response);
+            
+            // Better error detection: distinguish network errors vs HTTP client/server errors
+            if ($http_code >= 500) {
+                return ['success' => false, 'http_code' => $http_code, 'error' => "Server error (HTTP {$http_code})"];
+            } elseif ($http_code === 200) {
+                return ['success' => true, 'http_code' => $http_code, 'error' => null];
+            } else {
+                return ['success' => false, 'http_code' => $http_code, 'error' => "Client error (HTTP {$http_code})"];
+            }
+        } catch (\Exception $e) {
+            // Network-level errors (DNS failure, connection refused, timeout)
+            return ['success' => false, 'http_code' => null, 'error' => $e->getMessage()];
         }
-
-        $http_code = wp_remote_retrieve_response_code($response);
-        return [
-            'success' => $http_code === 200,
-            'http_code' => $http_code,
-            'error' => $http_code === 200 ? null : "HTTP status {$http_code}"
-        ];
     }
 
     private function debug_log($message, $data = null) {

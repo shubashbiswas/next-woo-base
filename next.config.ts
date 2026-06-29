@@ -76,6 +76,24 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      {
+        source: "/shop/(.*)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=60, stale-while-revalidate=3600",
+          },
+        ],
+      },
+      {
+        source: "/blog/(.*)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=120, stale-while-revalidate=7200",
+          },
+        ],
+      },
     ];
   },
   async redirects() {
