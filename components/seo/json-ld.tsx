@@ -6,7 +6,7 @@ function stripHtml(html: string): string {
 }
 
 // --- Reusable JSON-LD Script Injector ---
-function JsonLd({ data }: { data: Record<string, unknown> }) {
+export function JsonLd({ data }: { data: Record<string, unknown> }) {
   return (
     <script
       type="application/ld+json"

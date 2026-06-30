@@ -2,6 +2,18 @@
 #  Docker Compose — Headless WordPress + Next.js
 # ═══════════════════════════════════════════════════════════
 #
+# ⚠️  WARNING: This configuration is for LOCAL DEVELOPMENT ONLY.
+#    Default passwords are hardcoded for convenience. NEVER deploy
+#    this configuration to production without changing ALL passwords.
+#
+# Production checklist:
+#   - Set strong MYSQL_ROOT_PASSWORD, MYSQL_PASSWORD
+#   - Set strong WORDPRESS_WEBHOOK_SECRET
+#   - Set WC_CONSUMER_KEY and WC_CONSUMER_SECRET
+#   - Remove DISALLOW_FILE_MODS or set to false if you need plugin updates
+#   - Use a reverse proxy (Nginx/Caddy) with HTTPS termination
+#   - Restrict MySQL port (3307) to internal network only
+#
 # Usage:
 #   docker compose up -d                    # Start everything
 #   docker compose logs -f                  # Follow logs

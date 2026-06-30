@@ -6,7 +6,7 @@ import {
   getAllProductTags,
   getProductCategoryBySlug,
   getProductTagBySlug,
-} from "@/lib/woocommerce";
+} from "@/lib/woocommerce-server";
 
 import { Section, Container, Prose } from "@/components/craft";
 import { ProductGrid, ProductFilters } from "@/components/shop";

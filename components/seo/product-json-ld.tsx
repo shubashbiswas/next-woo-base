@@ -16,7 +16,7 @@ export function ProductJsonLd({ product }: ProductJsonLdProps) {
     mpn: product.sku,
     brand: {
       "@type": "Brand",
-      name: product.brands?.[0] || "Store"
+      name: "Store"
     },
     image: product.images.map((img) => img.src),
     offers: {

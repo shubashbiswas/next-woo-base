@@ -12,7 +12,10 @@ import type {
   Author,
   FeaturedMedia,
 } from "./wordpress.d";
-import { Agent } from "undici";
+
+// Note: HTTP connection pooling via undici Agent was removed because
+// Node 24's built-in fetch rejects `dispatcher` when combined with
+// Next.js `next.revalidate` ISR options. Standard fetch works correctly.
 
 // Single source of truth for WordPress configuration
 const baseUrl = process.env.WORDPRESS_URL;
@@ -49,13 +52,6 @@ export interface WordPressResponse<T> {
 const USER_AGENT = "Next.js WordPress Client";
 const CACHE_TTL = parseInt(process.env.ISR_CACHE_TTL || "3600", 10);
 
-// HTTP connection pool for reusing TCP connections to WordPress
-const wpAgent = new Agent({
-  connections: 10,
-  keepAliveTimeout: 60000,
-  keepAliveMaxTimeout: 60000,
-});
-
 // Core fetch - throws on error (for functions that require data)
 async function wordpressFetch<T>(
   path: string,
@@ -71,7 +67,6 @@ async function wordpressFetch<T>(
   const response = await fetch(url, {
     headers: { "User-Agent": USER_AGENT },
     next: { tags, revalidate: CACHE_TTL },
-    dispatcher: wpAgent as any, // HTTP connection pooling for reused TCP connections (Node.js 24 built-in fetch)
   });
 
   if (!response.ok) {
@@ -92,12 +87,30 @@ async function wordpressFetchGraceful<T>(
   query?: Record<string, any>,
   tags: string[] = ["wordpress"]
 ): Promise<T> {
-  if (!isConfigured) return fallback;
+  if (!isConfigured) {
+    if (process.env.NODE_ENV === "development") {
+      console.error(`[WordPress] Not configured - missing WORDPRESS_URL env var`);
+    }
+    return fallback;
+  }
 
   try {
     return await wordpressFetch<T>(path, query, tags);
-  } catch {
-    console.warn(`WordPress fetch failed for ${path}`);
+  } catch (error) {
+    if (process.env.NODE_ENV === "development") {
+      const url = `${baseUrl}${path}${query ? `?${querystring.stringify(query)}` : ""}`;
+      console.error(`[WordPress] Fetch failed for ${path}:`, error);
+      console.error(`[WordPress]   URL: ${url}`);
+      console.error(`[WordPress]   Check that:`);
+      console.error(`[WordPress]     1. WordPress is running at ${baseUrl}`);
+      console.error(`[WordPress]     2. REST API is accessible (test curl "${url}")`);
+      console.error(`[WordPress]     3. Permalinks are set to "Post name" (not Plain)`);
+      console.error(`[WordPress]     4. No plugin is blocking REST API`);
+      if (error instanceof WordPressAPIError) {
+        console.error(`[WordPress]   HTTP Status: ${error.status}`);
+        console.error(`[WordPress]   Message: ${error.message}`);
+      }
+    }
     return fallback;
   }
 }
@@ -117,7 +130,6 @@ async function wordpressFetchPaginated<T>(
   const response = await fetch(url, {
     headers: { "User-Agent": USER_AGENT },
     next: { tags, revalidate: CACHE_TTL },
-    dispatcher: wpAgent, // HTTP connection pooling for reused TCP connections
   });
 
   if (!response.ok) {

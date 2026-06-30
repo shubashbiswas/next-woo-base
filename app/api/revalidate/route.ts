@@ -1,32 +1,8 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
+import { checkRateLimit } from "@/lib/rate-limiter";
 
 export const maxDuration = 30;
-
-// In-memory token bucket rate limiter
-// Resets automatically; no external dependencies required
-const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
-
-function checkRateLimit(
-  key: string,
-  maxRequests: number = 10,
-  windowMs: number = 60000
-): boolean {
-  const now = Date.now();
-  const record = rateLimitStore.get(key);
-
-  if (!record || now > record.resetAt) {
-    rateLimitStore.set(key, { count: 1, resetAt: now + windowMs });
-    return true;
-  }
-
-  if (record.count >= maxRequests) {
-    return false;
-  }
-
-  record.count++;
-  return true;
-}
 
 interface RevalidateWebhookPayload {
   target: {
@@ -97,22 +73,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const contentType = target.type;
-    const contentId = target.id;
-    const slug = target.slug;
+  const contentType = target.type;
+  const contentId = target.id;
+  const slug = target.slug;
 
     console.log(`Processing async payload [${event}] from source [${source || "wordpress"}] -> Type: ${contentType} | Slug: ${slug}`);
 
     // 4. Clear Global Wrapper Cache Tags
-    revalidateTag("wordpress");
+    revalidateTag("wordpress", "default");
 
     // 5. Isolated Target Invalidation Logic
     if (contentType === "post") {
-      revalidateTag("posts");
-      revalidateTag("posts-page-1"); // Wipe just primary post feed references
+      revalidateTag("posts", "default");
+      revalidateTag("posts-page-1", "default"); // Wipe just primary post feed references
       
       if (contentId) {
-        revalidateTag(`post-${contentId}`);
+        revalidateTag(`post-${contentId}`, "default");
       }
       
       // Clear ONLY this single post profile path
@@ -121,10 +97,10 @@ export async function POST(request: NextRequest) {
       }
 
     } else if (contentType === "page") {
-      revalidateTag("pages");
+      revalidateTag("pages", "default");
       
       if (contentId) {
-        revalidateTag(`page-${contentId}`);
+        revalidateTag(`page-${contentId}`, "default");
       }
       
       // Clear ONLY this single standalone page path
@@ -134,14 +110,14 @@ export async function POST(request: NextRequest) {
 
     } else if (contentType === "taxonomy") {
       // Handles localized adjustments to categories or post tags
-      revalidateTag("categories");
-      revalidateTag("tags");
+      revalidateTag("categories", "default");
+      revalidateTag("tags", "default");
 
       if (contentId) {
-        revalidateTag(`posts-category-${contentId}`);
-        revalidateTag(`category-${contentId}`);
-        revalidateTag(`posts-tag-${contentId}`);
-        revalidateTag(`tag-${contentId}`);
+        revalidateTag(`posts-category-${contentId}`, "default");
+        revalidateTag(`category-${contentId}`, "default");
+        revalidateTag(`posts-tag-${contentId}`, "default");
+        revalidateTag(`tag-${contentId}`, "default");
       }
       
       // Refresh the specific post file containing changed taxonomies
@@ -151,12 +127,12 @@ export async function POST(request: NextRequest) {
 
     } else if (contentType === "product") {
       // WooCommerce product updated or created
-      revalidateTag("woocommerce");
-      revalidateTag("products");
-      revalidateTag("products-page-1");
+      revalidateTag("woocommerce", "default");
+      revalidateTag("products", "default");
+      revalidateTag("products-page-1", "default");
 
       if (contentId) {
-        revalidateTag(`product-${contentId}`);
+        revalidateTag(`product-${contentId}`, "default");
       }
 
       if (slug) {
@@ -169,7 +145,7 @@ export async function POST(request: NextRequest) {
     } else if (contentType === "product_stock") {
       // WooCommerce stock change — more targeted than full product update
       if (contentId) {
-        revalidateTag(`product-${contentId}`);
+        revalidateTag(`product-${contentId}`, "default");
       }
 
       if (slug) {
@@ -178,8 +154,8 @@ export async function POST(request: NextRequest) {
 
     } else if (contentType === "woocommerce_category") {
       // WooCommerce category updated
-      revalidateTag("woocommerce");
-      revalidateTag("products");
+      revalidateTag("woocommerce", "default");
+      revalidateTag("products", "default");
       revalidatePath("/shop");
     }
 

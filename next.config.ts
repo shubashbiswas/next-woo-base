@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const wordpressHostname =
   process.env.WORDPRESS_HOSTNAME || "us1.wpdemo.org";
@@ -125,4 +126,11 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  // Upload source maps to Sentry during build
+  sourcemaps: {
+    disable: process.env.NODE_ENV === "development",
+  },
+  // Only upload to Sentry when SENTRY_DSN is configured
+  silent: !process.env.SENTRY_DSN && !process.env.NEXT_PUBLIC_SENTRY_DSN,
+});

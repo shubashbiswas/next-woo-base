@@ -8,7 +8,7 @@ import {
   getProductReviews,
   getRelatedProducts,
   getAllProductSlugs,
-} from "@/lib/woocommerce";
+} from "@/lib/woocommerce-server";
 
 import { Section, Container, Prose } from "@/components/craft";
 import {
