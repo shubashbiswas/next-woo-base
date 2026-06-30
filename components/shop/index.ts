@@ -1,4 +1,5 @@
 // Shop components barrel export
+
 export { ProductCard } from "./product-card";
 export { ProductGallery } from "./product-gallery";
 export { ProductGrid } from "./product-grid";
@@ -9,3 +10,6 @@ export { VariationSelector } from "./variation-selector";
 export { AddToCartButton } from "./add-to-cart-button";
 export { CartProvider, useCart } from "./cart-provider";
 export { CartDrawer } from "./cart-drawer";
+
+// Shop utilities
+export { formatPrice, calculateDiscountPercentage, isProductInStock, getProductStockMessage } from "./utils";

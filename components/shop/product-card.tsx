@@ -1,10 +1,10 @@
-import Image from "next/image";
 import Link from "next/link";
 
 import type { Product } from "@/lib/woocommerce.d";
 import { cn } from "@/lib/utils";
-import { formatPrice, calculateDiscountPercentage, isProductInStock } from "@/lib/woocommerce";
+import { formatPrice, calculateDiscountPercentage, isProductInStock } from "./utils";
 import { Badge } from "@/components/ui/badge";
+import { LoadingImage } from "@/components/ui/image-loading";
 
 interface ProductCardProps {
   product: Product;
@@ -27,15 +27,15 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
         "hover:bg-accent/75 transition-all"
       )}
     >
-      <div className="relative aspect-square overflow-hidden bg-muted">
+      <div className="relative aspect-square overflow-hidden bg-muted transition-transform group-hover:scale-105">
         {primaryImage?.src ? (
-          <Image
+          <LoadingImage
             src={primaryImage.src}
             alt={primaryImage.alt || product.name}
             fill
-            className="object-cover transition-transform group-hover:scale-105"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
             priority={priority}
+            className="object-cover transition-transform group-hover:scale-105"
           />
         ) : (
           <div className="flex items-center justify-center w-full h-full text-muted-foreground">

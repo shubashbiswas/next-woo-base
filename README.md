@@ -54,9 +54,9 @@ Instead of building custom Stripe integration and authentication:
 
 ### Prerequisites
 
-- **WordPress 6.0+** with HTTPS enabled (required even for local development)
-- **WooCommerce 8.0+** installed and activated
-- **Node.js 18+** and pnpm
+- **WordPress 7.0+** with HTTPS enabled (required even for local development)
+- **WooCommerce 10.0+** installed and activated
+- **Node.js 22+** and pnpm
 
 ### Step 1: WordPress Setup
 

@@ -9,9 +9,8 @@ import {
   ReactNode,
 } from "react";
 
-import type { CartItem, Cart, CartTotals, ProductDefaultAttribute } from "@/lib/woocommerce.d";
-
-const CART_STORAGE_KEY = "woo-cart";
+import type { CartItem, Cart, CartTotals } from "@/lib/woocommerce.d";
+import { loadCartFromStorage, saveCartToStorage, clearCartFromStorage } from "./cart-utils";
 
 interface CartContextType {
   cart: Cart;
@@ -66,17 +65,17 @@ export function CartProvider({ children }: CartProviderProps) {
   // Load cart from localStorage on mount
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(CART_STORAGE_KEY);
-      if (stored) {
-        const items: CartItem[] = JSON.parse(stored);
+      const storedItems = loadCartFromStorage();
+      if (storedItems) {
         setCart({
-          items,
-          totals: calculateTotals(items),
+          items: storedItems,
+          totals: calculateTotals(storedItems),
         });
+      } else {
+        setIsLoading(false);
       }
     } catch (error) {
       console.error("Failed to load cart from storage:", error);
-    } finally {
       setIsLoading(false);
     }
   }, []);
@@ -84,11 +83,7 @@ export function CartProvider({ children }: CartProviderProps) {
   // Save cart to localStorage whenever it changes
   useEffect(() => {
     if (!isLoading) {
-      try {
-        localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart.items));
-      } catch (error) {
-        console.error("Failed to save cart to storage:", error);
-      }
+      saveCartToStorage(cart.items);
     }
   }, [cart.items, isLoading]);
 
