@@ -22,55 +22,11 @@
 
 ## 1. System Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        User Browser                              │
-│  ┌─────────────┐  ┌──────────────┐  ┌────────────────────────┐  │
-│  │ Cart (localStorage) │  Checkout Form │  Product Gallery      │  │
-│  └─────────────┘  └──────────────┘  └────────────────────────┘  │
-└────────────────────────┬────────────────────────────────────────┘
-                          │ HTTPS (Cloudflare)
-                          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Hostinger VPS (Single Node)                    │
-│                                                                  │
-│  ┌────────────────────────────────────────────────────────────┐  │
-│  │              Nginx Reverse Proxy (port 443/80)              │  │
-│  │      HTTPS Termination + Static Asset Serving              │  │
-│  └───────────────────────────┬────────────────────────────────┘  │
-│                              │                                    │
-│  ┌────────────────────────────────────────────────────────────┐  │
-│  │              Next.js Standalone Server (port 3000)          │  │
-│  │                                                             │  │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌─────────────────┐  │  │
-│  │  │ ISR Cache    │  │ React cache()│  │ API Routes      │  │  │
-│  │  │ (file-based) │  │ Dedup Layer  │  │ /api/revalidate │  │  │
-│  │  │              │  │              │  │ /api/checkout   │  │  │
-│  │  │              │  │              │  │ /api/health     │  │  │
-│  │  └──────────────┘  └──────────────┘  └─────────────────┘  │  │
-│  │                                                             │  │
-│  │  ┌──────────────────────────────────────────────────────┐   │  │
-│  │  │ Security Headers: CSP, X-Frame, Referrer, Permissions│   │  │
-│  │  │ Rate Limiter: File-based token bucket                │   │  │
-│  │  │ Error Monitoring: Sentry (optional)                  │   │  │
-│  │  └──────────────────────────────────────────────────────┘   │  │
-│  └────────────────────────┬─────────────────────────────────┘  │
-│                           │ REST API (HTTP, internal)            │
-│                           ▼                                      │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │           WordPress + WooCommerce (Docker)                │   │
-│  │                                                           │   │
-│  │  ┌──────────────┐  ┌─────────────────┐  ┌────────────┐  │   │
-│  │  │ REST API     │  │ Next Revalidate  │  │ MariaDB 11 │  │   │
-│  │  │ /wp-json    │  │ Plugin (WP-Cron) │  │ .4         │  │   │
-│  │  └──────────────┘  └─────────────────┘  └────────────┘  │   │
-│  │                                                           │   │
-│  │  ┌──────────────────────────────────────────────────┐    │   │
-│  │  │ WooCommerce REST API v3 (products, orders, etc.) │    │   │
-│  │  └──────────────────────────────────────────────────┘    │   │
-│  └───────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-```
+**Flow**: User Browser (HTTPS via Cloudflare) → Nginx → Next.js Standalone (ISR cache, API routes, Sentry) → WordPress + WooCommerce (Docker + MariaDB)
+
+**Next.js responsibilities**: ISR caching, React `cache()` deduplication, API routes (`/api/revalidate`, `/api/checkout`, `/api/health`), security headers, rate limiting.
+
+**WordPress responsibilities**: Content management, WooCommerce products/orders, REST API, Next Revalidation plugin for cache invalidation.
 
 ---
 
@@ -80,7 +36,7 @@
 
 | Stage | Component | Description |
 |-------|-----------|-------------|
-| **1. Request** | CDN / Nginx | Cloudflare (optional) → Nginx reverse proxy → Next.js |
+| **1. Request** | CDN / Nginx | Cloudflare (optional) → Nginx → Next.js |
 | **2. Cache Check** | ISR Cache | File-based cache with configurable TTL (default 3600s) |
 | **3. Cache Hit** | Serve | Returns cached HTML immediately |
 | **4. Cache Miss** | Next.js | Triggers server-side render |
@@ -230,53 +186,20 @@ File-based token bucket with:
 
 ## 5. Security Architecture
 
-### HTTP Security Headers
-
-| Header | Value | Purpose |
-|--------|-------|---------|
-| Content-Security-Policy | `default-src 'self'` + specific overrides | XSS prevention, resource origin restriction |
-| X-Content-Type-Options | `nosniff` | MIME-type sniffing prevention |
-| X-Frame-Options | `DENY` | Clickjacking protection |
-| Referrer-Policy | `strict-origin-when-cross-origin` | Controlled referrer leakage |
-| Permissions-Policy | `camera=(), microphone=(), geolocation=()` | API permission restriction |
-
-### API Endpoint Security
-
-| Endpoint | Protection | Implementation |
-|----------|-----------|----------------|
-| `POST /api/revalidate` | Rate limiting + Origin validation + Shared secret | 10 req/min/IP file-based bucket, WORDPRESS_URL origin check, x-webhook-secret header |
-| `POST /api/checkout` | CSRF origin validation + Payload size limit | NEXT_PUBLIC_SITE_URL origin check, 1MB body limit, PII redaction in logs |
-| `GET /api/health` | None (intentionally public) | Read-only status data, no sensitive info |
-
-### Credential Protection
-
-- **WooCommerce API keys**: Sent in `Authorization: Basic` header, never in URL query parameters
-- **Webhook secret**: Matched via constant-time comparison, never logged
-- **Stripe secret key**: Server-side only, never exposed to client
+- **Headers**: CSP (`default-src 'self'`), X-Content-Type-Options `nosniff`, X-Frame-Options `DENY`, Referrer-Policy `strict-origin-when-cross-origin`, Permissions-Policy restricting camera/mic/geolocation.
+- **Endpoints**: `/api/revalidate` secured with rate limiting + origin validation + shared secret. `/api/checkout` protected by CSRF origin check + 1MB body limit. `/api/health` intentionally public with no sensitive data.
+- **Credentials**: WooCommerce API keys in `Authorization: Basic` header (never in URLs). Webhook secret via constant-time comparison. Stripe key server-side only.
 
 ---
 
 ## 6. Performance Strategy
 
-### Caching Layers
+**Caching layers**: CDN (optional) → ISR file cache → React `cache()` deduplication → HTTP connection pooling (undici, 10 connections).
 
-1. **CDN** (Cloudflare, optional): Edge-cached static assets and HTML
-2. **ISR Cache**: File-based HTML cache with configurable TTL
-3. **React `cache()`**: In-memory request deduplication within a render pass
-4. **HTTP Connection Pooling**: Reused TCP connections to WordPress/WooCommerce APIs
-5. **Cache-Control Headers**:
-   - `/shop/*`: `public, s-maxage=60, stale-while-revalidate=3600`
-   - `/blog/*`: `public, s-maxage=120, stale-while-revalidate=7200`
-   - Static pages: 30s revalidate, 1y expire (ISR)
-
-### HTTP Caching Strategy
-
-| Route Pattern | Cache-Control | Rationale |
-|---------------|---------------|-----------|
-| `/shop/*` | `s-maxage=60, stale-while-revalidate=3600` | Fresh within 1 min, serve stale up to 1 hour |
-| `/blog/*` | `s-maxage=120, stale-while-revalidate=7200` | Content changes less frequently |
-| `/api/*` | `no-store` | Dynamic data, never cache |
-| `/health` | `no-store` | Must always return fresh status |
+**Cache-Control**:
+- `/shop/*`: `s-maxage=60, stale-while-revalidate=3600`
+- `/blog/*`: `s-maxage=120, stale-while-revalidate=7200`
+- `/api/*` and `/health`: `no-store`
 
 ---
 
@@ -310,36 +233,27 @@ File-based token bucket with:
 
 ## 8. Deployment Architecture
 
-### HTTPS Requirement (Production AND Development)
+**Topology**: Internet → Cloudflare → Nginx (HTTPS termination) → Next.js (port 3000) → WordPress + WooCommerce (Docker + MariaDB 11.4)
 
-WooCommerce REST API requires HTTPS for authentication. This applies to **both production and local development**.
+**Key notes**:
+- WooCommerce REST API requires HTTPS in both production and local development
+- Use `NODE_TLS_REJECT_UNAUTHORIZED=0` locally for self-signed certs (remove before production)
+- Default authentication via query parameters (`consumer_key` + `consumer_secret`)
 
-**Production:**
-- Use a valid SSL certificate (Let's Encrypt, Cloudflare, etc.)
-- Keep `NODE_TLS_REJECT_UNAUTHORIZED=1` (default, strict verification)
+**Required env vars**: `WORDPRESS_URL`, `WORDPRESS_HOSTNAME`, `WORDPRESS_WEBHOOK_SECRET`, `WC_CONSUMER_KEY`, `WC_CONSUMER_SECRET`, `NEXT_PUBLIC_SITE_URL`
 
-**Local Development:**
-- Use a self-signed certificate for your local WordPress
-- Set `NODE_TLS_REJECT_UNAUTHORIZED=0` in `.env` to accept the self-signed cert
-- **Remove `NODE_TLS_REJECT_UNAUTHORIZED=0` before deploying to production**
-- Alternatively, use query parameter authentication (`consumer_key` + `consumer_secret` in URL) which is the default in this codebase
-
-### Environment Variables
-
-| Variable | Required | Purpose |
-|----------|----------|---------|
-| `WORDPRESS_URL` | ✅ | WordPress base URL (**must use HTTPS**) |
-| `WORDPRESS_HOSTNAME` | ✅ | Hostname for image CDN patterns |
-| `WORDPRESS_WEBHOOK_SECRET` | ✅ | Shared secret for revalidation |
-| `WC_CONSUMER_KEY` | ✅ | WooCommerce REST API key |
-| `WC_CONSUMER_SECRET` | ✅ | WooCommerce REST API secret |
-| `NEXT_PUBLIC_SITE_URL` | ✅ | CSRF origin validation + canonical URLs |
-| `ISR_CACHE_TTL` | ❌ | Cache TTL in seconds (default: 3600) |
-| `STRIPE_SECRET_KEY` | ❌ | Stripe PaymentIntents for headless checkout |
-| `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` | ❌ | Sentry error monitoring |
-| `NODE_TLS_REJECT_UNAUTHORIZED` | ❌ | Set to `0` for local dev only (remove before production) |
+**Optional env vars**: `ISR_CACHE_TTL`, `STRIPE_SECRET_KEY`, `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN`, `NODE_TLS_REJECT_UNAUTHORIZED`
 
 ---
+
+## 9. Scaling Path
+
+| Stage | Traffic | Architecture Change | Estimated Cost |
+|-------|---------|--------------------|---------------:|
+| **1** | <500/day | Current single VPS + Cloudflare Free | ~$10-15/month |
+| **2** | 500-2,000/day | Replace file-based rate limiter with Redis. Add dedicated Redis instance for shared ISR cache in multi-PM2 mode. | ~$20-30/month |
+| **3** | 2,000-5,000/day | Horizontal scaling (2 app instances) + MariaDB read-replica. Add load balancer. | ~$50-80/month |
+| **4** | >5,000/day | Full HA: auto-scaling group, managed database, CDN caching rules, Redis cluster. | ~$100+/month |
 
 ### Key Bottlenecks to Monitor
 
@@ -347,4 +261,3 @@ WooCommerce REST API requires HTTPS for authentication. This applies to **both p
 2. **ISR cache size** — File-based ISR cache can grow large with thousands of products. Monitor disk usage.
 3. **Rate limiter persistence** — File-based writes may become I/O-bound at high traffic. Replace with Redis at Stage 2.
 4. **Checkout throughput** — Each checkout hits WooCommerce API + Stripe API. Monitor for timeout issues during traffic spikes.
-
