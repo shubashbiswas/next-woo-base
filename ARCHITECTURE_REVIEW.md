@@ -305,6 +305,20 @@ File-based token bucket with:
 
 ## 8. Deployment Architecture
 
+### HTTPS Requirement (Production AND Development)
+
+WooCommerce REST API requires HTTPS for authentication. This applies to **both production and local development**.
+
+**Production:**
+- Use a valid SSL certificate (Let's Encrypt, Cloudflare, etc.)
+- Keep `NODE_TLS_REJECT_UNAUTHORIZED=1` (default, strict verification)
+
+**Local Development:**
+- Use a self-signed certificate for your local WordPress
+- Set `NODE_TLS_REJECT_UNAUTHORIZED=0` in `.env` to accept the self-signed cert
+- **Remove `NODE_TLS_REJECT_UNAUTHORIZED=0` before deploying to production**
+- Alternatively, use query parameter authentication (`consumer_key` + `consumer_secret` in URL) which is the default in this codebase
+
 ### Production Topology (Single VPS)
 
 ```
@@ -335,7 +349,7 @@ Internet → Cloudflare CDN (Free Tier) → Hostinger VPS
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `WORDPRESS_URL` | ✅ | WordPress base URL |
+| `WORDPRESS_URL` | ✅ | WordPress base URL (**must use HTTPS**) |
 | `WORDPRESS_HOSTNAME` | ✅ | Hostname for image CDN patterns |
 | `WORDPRESS_WEBHOOK_SECRET` | ✅ | Shared secret for revalidation |
 | `WC_CONSUMER_KEY` | ✅ | WooCommerce REST API key |
@@ -344,6 +358,7 @@ Internet → Cloudflare CDN (Free Tier) → Hostinger VPS
 | `ISR_CACHE_TTL` | ❌ | Cache TTL in seconds (default: 3600) |
 | `STRIPE_SECRET_KEY` | ❌ | Stripe PaymentIntents for headless checkout |
 | `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` | ❌ | Sentry error monitoring |
+| `NODE_TLS_REJECT_UNAUTHORIZED` | ❌ | Set to `0` for local dev only (remove before production) |
 
 ---
 

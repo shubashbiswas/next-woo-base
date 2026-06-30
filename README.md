@@ -54,7 +54,7 @@ Instead of building custom Stripe integration and authentication:
 
 ### Prerequisites
 
-- **WordPress 6.0+** with HTTPS enabled
+- **WordPress 6.0+** with HTTPS enabled (required even for local development)
 - **WooCommerce 8.0+** installed and activated
 - **Node.js 18+** and pnpm
 
@@ -64,7 +64,7 @@ If you don't have a WordPress site yet:
 
 1. **Hosting**: Use any WordPress host (WP Engine, Bluehost, Cloudways, etc.) or local development (Local by Flywheel, MAMP, Docker)
 2. **Install WordPress**: Follow your host's WordPress installation process
-3. **Enable HTTPS**: Required for WooCommerce API authentication
+3. **Enable HTTPS**: Required for WooCommerce API authentication — this applies to local development too. Use a self-signed certificate if needed.
 
 #### Configure Permalinks
 
@@ -339,6 +339,7 @@ pnpm lint      # Run ESLint
 - Verify WooCommerce REST API credentials are correct
 - Check API at `your-site.com/wp-json/wc/v3/products`
 - Ensure products are published and visible
+- **Local development**: If using HTTP locally, WooCommerce may reject API requests. Switch to HTTPS with a self-signed certificate, or use query parameter authentication (`consumer_key` + `consumer_secret` in URL).
 
 ### Images not loading
 - Add WordPress domain to `WORDPRESS_HOSTNAME`
