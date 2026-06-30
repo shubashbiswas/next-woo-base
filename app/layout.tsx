@@ -14,6 +14,8 @@ import {
   WebSiteJsonLd,
 } from "@/components/seo/json-ld";
 
+import { AuthProvider } from "@/components/auth/auth-provider";
+
 import type { Metadata } from "next";
 
 const font = FontSans({
@@ -50,11 +52,13 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <CartProvider>
-            <Nav />
-            {children}
-            <Footer />
-          </CartProvider>
+          <AuthProvider>
+            <CartProvider>
+              <Nav />
+              {children}
+              <Footer />
+            </CartProvider>
+          </AuthProvider>
         </ThemeProvider>
         <Analytics />
       </body>

@@ -99,18 +99,33 @@ export default function Home() {
             </Link>
 
             {/* Account Link - WooCommerce */}
-            <a
-              className="border h-48 bg-accent/50 rounded-lg p-4 flex flex-col justify-between hover:scale-[1.02] transition-all"
-              href={`${process.env.NEXT_PUBLIC_WORDPRESS_URL}/my-account`}
-            >
-              <User size={32} />
-              <span>
-                My Account
-                <span className="block text-sm text-muted-foreground">
-                  Login, orders, and settings
+            {process.env.NEXT_PUBLIC_WORDPRESS_URL ? (
+              <a
+                className="border h-48 bg-accent/50 rounded-lg p-4 flex flex-col justify-between hover:scale-[1.02] transition-all"
+                href={`${process.env.NEXT_PUBLIC_WORDPRESS_URL}/my-account`}
+              >
+                <User size={32} />
+                <span>
+                  My Account
+                  <span className="block text-sm text-muted-foreground">
+                    Login, orders, and settings
+                  </span>
                 </span>
-              </span>
-            </a>
+              </a>
+            ) : (
+              <Link
+                className="border h-48 bg-accent/50 rounded-lg p-4 flex flex-col justify-between hover:scale-[1.02] transition-all"
+                href="/account"
+              >
+                <User size={32} />
+                <span>
+                  My Account
+                  <span className="block text-sm text-muted-foreground">
+                    Login, orders, and settings
+                  </span>
+                </span>
+              </Link>
+            )}
             <Link
               className="border h-48 bg-accent/50 rounded-lg p-4 flex flex-col justify-between hover:scale-[1.02] transition-all"
               href="/posts/categories"

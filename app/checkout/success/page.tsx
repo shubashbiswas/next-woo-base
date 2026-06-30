@@ -23,10 +23,10 @@ export default function CheckoutSuccessPage({ order }: OrderSuccessProps) {
     if (typeof window !== "undefined") {
       const urlParams = new URLSearchParams(window.location.search);
       const redirectParam = urlParams.get("redirect");
-      
-      if (redirectParam && !order.id) {
+
+      if (redirectParam && !order?.id) {
         setRedirectUrl(redirectParam);
-        
+
         // Redirect after a brief delay to allow UI to render
         setTimeout(() => {
           window.location.href = redirectParam;
@@ -35,7 +35,7 @@ export default function CheckoutSuccessPage({ order }: OrderSuccessProps) {
         setIsLoading(false);
       }
     }
-  }, [order.id]);
+  }, [order?.id]);
 
   if (isLoading) {
     return (

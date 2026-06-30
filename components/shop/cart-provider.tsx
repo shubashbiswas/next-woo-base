@@ -66,14 +66,13 @@ export function CartProvider({ children }: CartProviderProps) {
   useEffect(() => {
     try {
       const storedItems = loadCartFromStorage();
-      if (storedItems) {
+      if (storedItems !== null) {
         setCart({
           items: storedItems,
           totals: calculateTotals(storedItems),
         });
-      } else {
-        setIsLoading(false);
       }
+      setIsLoading(false);
     } catch (error) {
       console.error("Failed to load cart from storage:", error);
       setIsLoading(false);
@@ -85,6 +84,7 @@ export function CartProvider({ children }: CartProviderProps) {
     if (!isLoading) {
       saveCartToStorage(cart.items);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cart.items, isLoading]);
 
   const openCart = useCallback(() => setIsOpen(true), []);

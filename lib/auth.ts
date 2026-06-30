@@ -17,8 +17,7 @@ export function generateToken(payload: AuthPayload): string {
   return jwt.sign(
     payload,
     JWT_SECRET,
-    { expiresIn: JWT_EXPIRY },
-    { algorithm: "HS256" }
+    { expiresIn: JWT_EXPIRY, algorithm: "HS256" }
   );
 }
 

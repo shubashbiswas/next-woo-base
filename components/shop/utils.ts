@@ -30,11 +30,11 @@ export function isProductInStock(product: { manage_stock?: boolean | null; stock
     return product.stock_status === "instock";
   }
 
-  const quantity = (product.stock_quantity ?? undefined);
-  
+  const quantity = product.stock_quantity;
+
   return (
     product.stock_status === "instock" &&
-    (quantity !== null && quantity > 0)
+    (quantity !== null && quantity !== undefined && quantity > 0)
   );
 }
 
@@ -48,7 +48,7 @@ export function getProductStockMessage(product: { manage_stock?: boolean | null;
 
   const quantity = (product.stock_quantity ?? undefined);
   
-  if (product.manage_stock && quantity !== null) {
+  if (product.manage_stock && quantity != null) {
     if (quantity <= (product.low_stock_amount || 3)) {
       return `Only ${quantity} left in stock`;
     }

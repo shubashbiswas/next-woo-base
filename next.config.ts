@@ -28,7 +28,7 @@ if (process.env.NODE_ENV === "production") {
 
 const cspValue = [
   `default-src 'self'`,
-  `img-src 'self' ${wordpressHostname || ""} data: blob:`,
+  `img-src 'self' ${wordpressHostname || ""} woo-dev.local data: blob:`,
   `script-src 'self' 'unsafe-inline'`,
   `style-src 'self' 'unsafe-inline'`,
   `frame-ancestors 'none'`,
@@ -48,7 +48,14 @@ const nextConfig: NextConfig = {
         port: "",
         pathname: "/**",
       },
+      {
+        protocol: "https",
+        hostname: "woo-dev.local",
+        port: "",
+        pathname: "/**",
+      },
     ],
+    unoptimized: true,
   },
   async headers() {
     return [
