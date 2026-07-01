@@ -26,11 +26,15 @@ if (process.env.NODE_ENV === "production") {
   console.log("✅ All required environment variables are set.");
 }
 
+const wordpressOrigin = wordpressUrl ? new URL(wordpressUrl).origin : "";
+
 const cspValue = [
   `default-src 'self'`,
-  `img-src 'self' ${wordpressHostname || ""} woo-dev.local data: blob:`,
+  `img-src 'self' ${wordpressHostname || ""} ${wordpressOrigin?.replace(/^https?:\/\//, "") || ""} data: blob:`,
   `script-src 'self' 'unsafe-inline'`,
   `style-src 'self' 'unsafe-inline'`,
+  `frame-src 'self' ${wordpressOrigin || `${wordpressHostname || ""}`}`,
+  `connect-src 'self' ${wordpressOrigin || `${wordpressHostname || ""}`}`,
   `frame-ancestors 'none'`,
   `base-uri 'self'`,
   `form-action 'self'`,

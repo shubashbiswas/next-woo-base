@@ -43,7 +43,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       const stored = localStorage.getItem(AUTH_STORAGE_KEY);
       if (stored) {
-        setUser(JSON.parse(stored));
+        const parsed = JSON.parse(stored);
+        // Support both old format { token, user } and new format (just user object)
+        setUser(parsed.user ?? parsed);
       }
     } catch {}
     setIsLoading(false);

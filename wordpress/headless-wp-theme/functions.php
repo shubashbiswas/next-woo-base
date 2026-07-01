@@ -1,6 +1,7 @@
 <?php
 /**
  * Next.js Headless Theme
+ * Version: 2.0.0 - with iframe support
  *
  * Redirects all frontend requests to the Next.js application.
  * Allows admin, login, REST API, and other WordPress internals.
@@ -23,7 +24,10 @@ add_action('template_redirect', function () {
         strpos($uri, 'wp-json') !== false ||
         strpos($uri, 'wp-cron') !== false ||
         strpos($uri, 'xmlrpc.php') !== false ||
-        strpos($uri, rest_get_url_prefix()) !== false
+        strpos($uri, rest_get_url_prefix()) !== false ||
+        strpos($uri, 'my-account') !== false ||
+        strpos($uri, 'wc-api') !== false ||
+        strpos($uri, 'wc-ajax') !== false
     ) {
         return;
     }
@@ -52,6 +56,42 @@ add_action('template_redirect', function () {
         exit;
     }
 });
+
+// ═══════════════════════════════════════════════════════════
+// IFrame Embedding Support for WooCommerce My Account
+// ═══════════════════════════════════════════════════════════
+// Fix 1: Remove WordPress core action that sends X-Frame-Options
+add_action('template_redirect', function () {
+    if (
+        strpos($_SERVER['REQUEST_URI'] ?? '', 'my-account') !== false ||
+        strpos($_SERVER['REQUEST_URI'] ?? '', '/account/') !== false
+    ) {
+        remove_action('send_headers', 'send_frame_options_header', 10);
+    }
+});
+
+// Fix 2: Override headers AFTER core sets them (remove X-Frame-Options + CSP)
+add_action('send_headers', function () {
+    if (
+        strpos($_SERVER['REQUEST_URI'] ?? '', 'my-account') !== false ||
+        strpos($_SERVER['REQUEST_URI'] ?? '', '/account/') !== false
+    ) {
+        // Remove restrictive headers
+        header_remove('X-Frame-Options');
+        // Override CSP to allow embedding
+        header('Content-Security-Policy: frame-ancestors \'self\' http://localhost:3000 https://next-woo.com;', true);
+    }
+}, 9999);
+
+// Fix 3: Filter the final wp_headers array (catches WooCommerce-added headers)
+add_filter('wp_headers', function ($headers) {
+    if (strpos($_SERVER['REQUEST_URI'] ?? '', 'my-account') !== false) {
+        unset($headers['X-Frame-Options']);
+        $headers['Content-Security-Policy'] = "frame-ancestors 'self' http://localhost:3000 https://next-woo.com";
+    }
+    return $headers;
+}, 9999);
+// ═══════════════════════════════════════════════════════════
 
 // Remove unnecessary frontend features for headless optimization
 add_action('after_setup_theme', function () {
